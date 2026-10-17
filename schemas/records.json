@@ -1,0 +1,425 @@
+{
+ "launches": {
+  "type": "object",
+  "properties": {
+   "kind": {
+    "type": "string",
+    "maxLength": 16,
+    "enum": [
+     "launch-xray"
+    ]
+   },
+   "token": {
+    "type": "string",
+    "maxLength": 42
+   },
+   "name": {
+    "type": "string",
+    "maxLength": 40
+   },
+   "symbol": {
+    "type": "string",
+    "maxLength": 16
+   },
+   "decimals": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 255
+   },
+   "totalSupply": {
+    "type": "string",
+    "maxLength": 80
+   },
+   "quote": {
+    "type": "string",
+    "maxLength": 42
+   },
+   "pairedWithClaus": {
+    "type": "boolean"
+   },
+   "block": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 10000000000
+   },
+   "blockHash": {
+    "type": "string",
+    "maxLength": 66
+   },
+   "at": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 99999999999
+   },
+   "launch": {
+    "type": "object",
+    "properties": {
+     "tx": {
+      "type": "string",
+      "maxLength": 66
+     },
+     "block": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000000000
+     },
+     "at": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 99999999999
+     },
+     "launcher": {
+      "type": "string",
+      "maxLength": 42
+     },
+     "router": {
+      "type": "string",
+      "maxLength": 42
+     }
+    },
+    "required": [
+     "tx",
+     "block",
+     "at",
+     "launcher",
+     "router"
+    ],
+    "additionalProperties": false
+   },
+   "pool": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string",
+      "maxLength": 66
+     },
+     "currency0": {
+      "type": "string",
+      "maxLength": 42
+     },
+     "currency1": {
+      "type": "string",
+      "maxLength": 42
+     },
+     "fee": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 16777215
+     },
+     "tickSpacing": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 32767
+     },
+     "hooks": {
+      "type": "string",
+      "maxLength": 42
+     },
+     "hookName": {
+      "type": "string",
+      "maxLength": 60
+     },
+     "hookVerified": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "id",
+     "currency0",
+     "currency1",
+     "fee",
+     "tickSpacing",
+     "hooks",
+     "hookName",
+     "hookVerified"
+    ],
+    "additionalProperties": false
+   },
+   "state": {
+    "type": "object",
+    "properties": {
+     "sqrtPriceX96": {
+      "type": "string",
+      "maxLength": 80
+     },
+     "tick": {
+      "type": "string",
+      "maxLength": 12
+     },
+     "lpFee": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 16777215
+     },
+     "activeLiquidity": {
+      "type": "string",
+      "maxLength": 80
+     }
+    },
+    "required": [
+     "sqrtPriceX96",
+     "tick",
+     "lpFee",
+     "activeLiquidity"
+    ],
+    "additionalProperties": false
+   },
+   "powers": {
+    "type": "object",
+    "properties": {
+     "owner": {
+      "type": "string",
+      "maxLength": 42
+     },
+     "hasOwner": {
+      "type": "boolean"
+     },
+     "proxyImpl": {
+      "type": "string",
+      "maxLength": 42
+     },
+     "proxyAdmin": {
+      "type": "string",
+      "maxLength": 42
+     },
+     "tokenVerified": {
+      "type": "boolean"
+     },
+     "deployer": {
+      "type": "string",
+      "maxLength": 42
+     }
+    },
+    "required": [
+     "owner",
+     "hasOwner",
+     "proxyImpl",
+     "proxyAdmin",
+     "tokenVerified",
+     "deployer"
+    ],
+    "additionalProperties": false
+   },
+   "baseline": {
+    "type": "object",
+    "properties": {
+     "L0": {
+      "type": "string",
+      "maxLength": 80
+     },
+     "lpEvents": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+     },
+     "lpProviders": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "maxLength": 42
+      },
+      "maxItems": 8
+     },
+     "added": {
+      "type": "string",
+      "maxLength": 80
+     },
+     "removed": {
+      "type": "string",
+      "maxLength": 80
+     }
+    },
+    "required": [
+     "L0",
+     "lpEvents",
+     "lpProviders"
+    ],
+    "additionalProperties": false
+   },
+   "couldNotCheck": {
+    "type": "array",
+    "items": {
+     "type": "string",
+     "maxLength": 120
+    },
+    "maxItems": 12
+   },
+   "sources": {
+    "type": "array",
+    "items": {
+     "type": "object",
+     "properties": {
+      "label": {
+       "type": "string",
+       "maxLength": 60
+      },
+      "url": {
+       "type": "string",
+       "maxLength": 200
+      }
+     },
+     "required": [
+      "label",
+      "url"
+     ],
+     "additionalProperties": false
+    },
+    "maxItems": 8
+   },
+   "checkedBy": {
+    "type": "string",
+    "maxLength": 8,
+    "enum": [
+     "human",
+     "watcher"
+    ]
+   },
+   "note": {
+    "type": "string",
+    "maxLength": 400
+   }
+  },
+  "required": [
+   "kind",
+   "token",
+   "name",
+   "symbol",
+   "decimals",
+   "totalSupply",
+   "quote",
+   "pairedWithClaus",
+   "block",
+   "blockHash",
+   "at",
+   "launch",
+   "pool",
+   "state",
+   "powers",
+   "baseline",
+   "couldNotCheck",
+   "sources",
+   "checkedBy",
+   "note"
+  ],
+  "additionalProperties": false
+ },
+ "alerts": {
+  "type": "object",
+  "properties": {
+   "kind": {
+    "type": "string",
+    "maxLength": 16,
+    "enum": [
+     "liquidity",
+     "owner",
+     "upgrade",
+     "mint",
+     "fee"
+    ]
+   },
+   "token": {
+    "type": "string",
+    "maxLength": 42
+   },
+   "symbol": {
+    "type": "string",
+    "maxLength": 16
+   },
+   "poolId": {
+    "type": "string",
+    "maxLength": 66
+   },
+   "line": {
+    "type": "string",
+    "maxLength": 300
+   },
+   "tx": {
+    "type": "string",
+    "maxLength": 66
+   },
+   "block": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 10000000000
+   },
+   "at": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 99999999999
+   }
+  },
+  "required": [
+   "kind",
+   "token",
+   "symbol",
+   "poolId",
+   "line",
+   "tx",
+   "block",
+   "at"
+  ],
+  "additionalProperties": false
+ },
+ "watchstate": {
+  "type": "object",
+  "properties": {
+   "v": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 10
+   },
+   "lastBlock": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 10000000000
+   },
+   "lastAt": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 99999999999
+   },
+   "cycles": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 100000000
+   },
+   "page": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 20
+   },
+   "pages": {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 20
+   },
+   "pools": {
+    "type": "array",
+    "items": {
+     "type": "string",
+     "maxLength": 260
+    },
+    "maxItems": 12
+   },
+   "gaps": {
+    "type": "array",
+    "items": {
+     "type": "string",
+     "maxLength": 60
+    },
+    "maxItems": 8
+   }
+  },
+  "required": [
+   "v",
+   "lastBlock",
+   "lastAt",
+   "cycles",
+   "page",
+   "pages",
+   "pools",
+   "gaps"
+  ],
+  "additionalProperties": false
+ }
+}
