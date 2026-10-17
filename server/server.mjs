@@ -28,7 +28,7 @@ async function start() {
     const r = await fetch(CHECKPOINTS, { signal: AbortSignal.timeout(15000) });
     const j = r.ok ? await r.json() : { items: [] };
     const pages = (j.items || []).filter(x => x && WRITERS.has(x.authorId) && x.data && Number.isInteger(x.data.lastBlock) && Array.isArray(x.data.pools)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(x => x.data);
-    if (pages.length) { s = restore(pages); boot.from = 'checkpoint at block ' + s.lastBlock + ' (' + s.pools.length + ' pools)'; }
+    if (pages.length) { s = restore(pages); if (s) boot.from = 'complete checkpoint set at block ' + s.lastBlock + ' (' + s.pools.length + ' pools)'; else log('no complete checkpoint set among ' + pages.length + ' pages'); }
   } catch (e) { log('checkpoint read failed: ' + e.message); }
   if (!s) {
     const head = parseInt(await rpc('eth_blockNumber', []), 16);

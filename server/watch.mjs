@@ -85,21 +85,30 @@ export function checkpoint(s, page = 0) {
     pools: s.pools.slice(page * C.PAGE, (page + 1) * C.PAGE).map(enc),
     gaps: page === 0 ? s.gaps.slice(-8).map(g => [g.kind, g.from, g.to].join(',')) : [] };
 }
-// Restore from every page that shares the newest lastBlock. A missing page is a stated gap: those pools are watched
-// again only if the re-scan rediscovers them; nothing is invented.
+// Restore only from a COMPLETE set: every page 0..pages-1 of one snapshot (one lastBlock, one page count). The newest
+// complete set wins; an incomplete newer set is skipped, never partly used, so a missing page cannot drop watched
+// pools. Re-scanning from an older complete set is safe: alerts keep their keys, so nothing is copied twice.
+// Returns null when no complete set exists (the server then cold-starts and states the gap).
 export function restore(pages) {
-  // `pages` must be newest first. Checkpoint pages are re-copied many times; keep only the newest copy of each page
-  // at the newest block, so repeated copies can never duplicate pools.
-  const top = Math.max(...pages.map(p => p.lastBlock)), seenPage = new Set(), use = [];
-  for (const p of pages) if (p.lastBlock === top && !seenPage.has(p.page)) { seenPage.add(p.page); use.push(p); }
-  const s = emptyState(top); s.lastAt = use[0].lastAt || 0; s.cycles = use[0].cycles || 0;
-  s.gaps = (use.find(p => p.page === 0) || { gaps: [] }).gaps.map(g => { const a = g.split(','); return { kind: a[0], from: +a[1], to: +a[2] }; });
-  const want = use[0].pages || 1, got = new Set(use.map(p => p.page));
-  for (let i = 0; i < want; i++) if (!got.has(i)) s.gaps.push({ kind: 'checkpoint-page-' + i + '-missing', from: top, to: top });
-  s.pools = use.sort((a, b) => a.page - b.page).flatMap(p => p.pools.map(dec));
-  s.seen = s.pools.map(p => p.poolId);
-  return s;
+  // `pages` must be newest first. Pages are re-copied many times; the newest copy of each page in a set is used.
+  const blocks = [...new Set(pages.map(p => p.lastBlock))].sort((a, b) => b - a);
+  for (const top of blocks) {
+    const set = pages.filter(p => p.lastBlock === top), n = set[0].pages || 1, use = new Map();
+    if (set.some(p => (p.pages || 1) !== n)) continue;            // two different snapshots at one block: not a set
+    for (const p of set) if (Number.isInteger(p.page) && p.page >= 0 && p.page < n && !use.has(p.page)) use.set(p.page, p);
+    if (use.size !== n) continue;                                    // a page is missing: skip the whole set
+    const ordered = [...use.values()].sort((a, b) => a.page - b.page), s = emptyState(top);
+    s.lastAt = ordered[0].lastAt || 0; s.cycles = ordered[0].cycles || 0;
+    s.gaps = (ordered[0].gaps || []).map(g => { const a = g.split(','); return { kind: a[0], from: +a[1], to: +a[2] }; });
+    s.pools = ordered.flatMap(p => p.pools.map(dec));
+    s.seen = s.pools.map(p => p.poolId);
+    return s;
+  }
+  return null;
 }
+// A frozen copy of the state for checkpointing. The runtime copies one page per read, hours apart, while the server
+// keeps scanning; serving every page of one set from the same snapshot is what makes a complete set possible.
+function snapshot(s) { return { lastBlock: s.lastBlock, lastAt: s.lastAt, cycles: s.cycles, gaps: s.gaps.map(g => ({ ...g })), pools: s.pools.map(p => ({ ...p })) }; }
 
 // ---------- One cycle over the block range (lastBlock, to] ----------
 export async function cycle(rpc, s, log = () => {}) {
@@ -150,7 +159,7 @@ export async function cycle(rpc, s, log = () => {}) {
     s.xrays.push(x); if (s.xrays.length > 50) s.xrays.shift();
     log('launch ' + (x.symbol || '?') + ' ' + x.token + ' via ' + f.source);
     if (live.some(p => p.poolId === f.poolId))
-      s.pools.push({ poolId: f.poolId, token: f.token, symbol: x.symbol || '?', startBlock: f.block, baseBlock: Math.min(to, f.block + C.BASE_BLOCKS), untilAt: at + C.WATCH_SECONDS, L0: '0', added: '0', removed: '0', lpFee: x.lpFee, fired: 0, ok: 0, failed: 0, closed: false });
+      s.pools.push({ poolId: f.poolId, token: f.token, symbol: x.symbol || '?', startBlock: f.block, baseBlock: f.block + C.BASE_BLOCKS, untilAt: at + C.WATCH_SECONDS, L0: '0', added: '0', removed: '0', lpFee: x.lpFee, fired: 0, ok: 0, failed: 0, closed: false });
     else s.gaps.push({ kind: 'capacity', token: f.token, from: f.block, to: f.block });
   }
   live = s.pools.filter(p => !p.closed);
@@ -196,9 +205,13 @@ function alert(s, p, kind, line, l, at, blockIfNoLog = 0) {
   s.alerts.sort((a, b) => (a.key < b.key ? -1 : 1));
 }
 // What the managed runtime copies next: the oldest alert after its cursor, else one checkpoint page. Under 4,000 characters.
+// Page 0 starts a new snapshot; pages 1..n-1 come from that same snapshot. If the server restarted mid-set there is no
+// snapshot for that set, so a fresh one is taken: that set is incomplete and restore() skips it.
 export function bridge(s, after = '', page = 0) {
   const alert = s.alerts.find(a => a.key > after) || null;
-  return { alert, checkpoint: alert ? null : checkpoint(s, page) };
+  if (alert) return { alert, checkpoint: null };
+  if (page === 0 || !s.snap) s.snap = snapshot(s);
+  return { alert: null, checkpoint: checkpoint(s.snap, page) };
 }
 
 // ---------- Coverage report (spec: delivered after the 14 days, alerts or not) ----------
