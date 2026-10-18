@@ -22,7 +22,8 @@ Since e491bcb, two fixes, made identically in both versions and found by the mul
 |---|---|
 | `server-go/watch.go` | Discovery, X-ray, the five triggers, paged checkpoint, coverage report, bridge. |
 | `server-go/main.go` | HTTP (port 8080), start-up from the last complete checkpoint set, the 5-minute loop. Cycles run on a copy of the state, so HTTP reads never wait on the network. |
-| `server-go/Dockerfile` | **What the network builds.** Build context `server-go/`. Builder pinned to the same golang digest as the network's own OCI verification fixture; final image `scratch` with only the binary and CA certificates, unprivileged user. No downloads at build time. |
+| `Dockerfile` | **What the network builds.** Build context: the repository root, so the network's source snapshot carries the repository's own paths (`Dockerfile`, `server-go/go.mod`, `server-go/main.go`, `server-go/watch.go`, `README.md`, `LICENSE`) and the image review can match every file to this commit. Same build as `server-go/Dockerfile`, with the sources copied from `server-go/`. |
+| `server-go/Dockerfile` | The same build with `server-go/` as the build context, for building locally from that folder. Builder pinned to the same golang digest as the network's own OCI verification fixture; final image `scratch` with only the binary and CA certificates, unprivileged user. No downloads at build time. |
 | `server/` | The reviewed JavaScript version (`watch.mjs`, `server.mjs`, Node `Dockerfile`), kept as the specification the Go port is tested against. Changed since e491bcb only by the two fixes above. |
 | `runtime/shifts-watch.mjs` | Revision 4 of Claus Shifts' existing managed-runtime worker. Adds the bridge that copies alerts and checkpoint pages into public records. Dormant while `SERVER` is empty: its plan is then identical to revision 3. |
 | `schemas/records.json` | The `launches`, `alerts` and `watchstate` record schemas (additive to the existing app). |
