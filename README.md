@@ -8,16 +8,21 @@ A small, keyless server that finds new token launches on Ethereum (every launch 
 
 It holds no key, signs nothing, writes nothing to any network and keeps nothing on disk. It reads the chain through public RPC and serves what it found as read-only JSON.
 
+## Why Go
+
+The Claus Network's builder caps images at 32 MiB. The Node base image alone is 60.7 MB, so the first version (`server/`, the one Claus reviewed at e491bcb, unchanged) could not be built there. `server-go/` is a line-for-line Go port: standard library only, a static binary on an empty `scratch` image, about 7 MB in total. It serves the same endpoints with the same JSON, and `test/diff.test.mjs` proves it: both servers run side by side against identical mock Ethereum nodes and must agree on every endpoint through launches, every trigger, retries, gaps, fee reads and a restart from checkpoint records (88 checks).
+
 ## Layout
 
 | Path | What |
 |---|---|
-| `server/watch.mjs` | Discovery, X-ray, the five triggers, paged checkpoint, coverage report, bridge. No dependencies. |
-| `server/server.mjs` | HTTP (port 8080), start-up from the last checkpoint, the 5-minute loop. |
-| `server/Dockerfile` | Node 22 Alpine pinned by digest, unprivileged user, no install step. Build context: `server/`. |
+| `server-go/watch.go` | Discovery, X-ray, the five triggers, paged checkpoint, coverage report, bridge. |
+| `server-go/main.go` | HTTP (port 8080), start-up from the last complete checkpoint set, the 5-minute loop. Cycles run on a copy of the state, so HTTP reads never wait on the network. |
+| `server-go/Dockerfile` | **What the network builds.** Build context `server-go/`. Builder pinned to the same golang digest as the network's own OCI verification fixture; final image `scratch` with only the binary and CA certificates, unprivileged user. No downloads at build time. |
+| `server/` | The reviewed JavaScript version (`watch.mjs`, `server.mjs`, Node `Dockerfile`), unchanged since e491bcb and kept as the specification the Go port is tested against. |
 | `runtime/shifts-watch.mjs` | Revision 4 of Claus Shifts' existing managed-runtime worker. Adds the bridge that copies alerts and checkpoint pages into public records. Dormant while `SERVER` is empty: its plan is then identical to revision 3. |
 | `schemas/records.json` | The `launches`, `alerts` and `watchstate` record schemas (additive to the existing app). |
-| `test/` | `node test/server.test.mjs` (22 scenarios) and `node test/e2e.test.mjs` (server → bridge → runtime → records → restart, 10 checks). |
+| `test/` | `node test/server.test.mjs` (22 scenarios), `node test/e2e.test.mjs` (server → bridge → runtime → records → restart, 10 checks), and `node test/diff.test.mjs server <go-binary>` (Go vs reference, 88 checks). |
 
 ## Endpoints (all GET, read-only)
 
@@ -30,7 +35,7 @@ It holds no key, signs nothing, writes nothing to any network and keeps nothing 
 ```json
 { "version": 1, "mode": "http", "image": "<registry address from resource_image_publish>", "region": "<from resource_profiles>",
   "cpu": 1, "memoryMiB": 512, "gpu": null, "port": 8080, "healthPath": "/health",
-  "command": ["node", "server.mjs"], "storageGiB": 0 }
+  "command": ["/server"], "storageGiB": 0 }
 ```
 
 ## Every 5 minutes
