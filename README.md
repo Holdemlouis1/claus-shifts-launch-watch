@@ -10,7 +10,11 @@ It holds no key, signs nothing, writes nothing to any network and keeps nothing 
 
 ## Why Go
 
-The Claus Network's builder caps images at 32 MiB. The Node base image alone is 60.7 MB, so the first version (`server/`, the one Claus reviewed at e491bcb, unchanged) could not be built there. `server-go/` is a line-for-line Go port: standard library only, a static binary on an empty `scratch` image, about 7 MB in total. It serves the same endpoints with the same JSON, and `test/diff.test.mjs` proves it: both servers run side by side against identical mock Ethereum nodes and must agree on every endpoint through launches, every trigger, retries, gaps, fee reads and a restart from checkpoint records (88 checks).
+The Claus Network's builder caps images at 32 MiB. The Node base image alone is 60.7 MB, so the first version (`server/`, the one Claus reviewed at e491bcb) could not be built there. `server-go/` is a line-for-line Go port: standard library only, a static binary on an empty `scratch` image, about 7 MB in total. It serves the same endpoints with the same JSON, and `test/diff.test.mjs` proves it: both servers run side by side against identical mock Ethereum nodes and must agree on every endpoint through launches, every trigger, retries, gaps, fee reads and a restart from checkpoint records (88 checks). `test/restore-multipage.test.mjs` does the same with 22 to 26 pools, so every checkpoint set spans three records (70 checks).
+
+Since e491bcb, two fixes, made identically in both versions and found by the multi-page test:
+- **Fee reads.** A short or malformed `getSlot0` reply (some public nodes answer `0x`) is now a failed read ("could not check" in the X-ray, a `fee` gap in the hourly read), never a fee of 0. A pool whose X-ray could not read the fee takes its first good hourly read as the baseline, so its fee trigger is armed instead of staying off for 14 days.
+- **Alert keys** use the full token address (`block:kind:address`), not its first 12 hex characters, so two vanity tokens sharing a long prefix cannot collide when both fire the same trigger in the same block. Keys stay under the runtime's 80-character limit.
 
 ## Layout
 
@@ -19,10 +23,10 @@ The Claus Network's builder caps images at 32 MiB. The Node base image alone is 
 | `server-go/watch.go` | Discovery, X-ray, the five triggers, paged checkpoint, coverage report, bridge. |
 | `server-go/main.go` | HTTP (port 8080), start-up from the last complete checkpoint set, the 5-minute loop. Cycles run on a copy of the state, so HTTP reads never wait on the network. |
 | `server-go/Dockerfile` | **What the network builds.** Build context `server-go/`. Builder pinned to the same golang digest as the network's own OCI verification fixture; final image `scratch` with only the binary and CA certificates, unprivileged user. No downloads at build time. |
-| `server/` | The reviewed JavaScript version (`watch.mjs`, `server.mjs`, Node `Dockerfile`), unchanged since e491bcb and kept as the specification the Go port is tested against. |
+| `server/` | The reviewed JavaScript version (`watch.mjs`, `server.mjs`, Node `Dockerfile`), kept as the specification the Go port is tested against. Changed since e491bcb only by the two fixes above. |
 | `runtime/shifts-watch.mjs` | Revision 4 of Claus Shifts' existing managed-runtime worker. Adds the bridge that copies alerts and checkpoint pages into public records. Dormant while `SERVER` is empty: its plan is then identical to revision 3. |
 | `schemas/records.json` | The `launches`, `alerts` and `watchstate` record schemas (additive to the existing app). |
-| `test/` | `node test/server.test.mjs` (22 scenarios), `node test/e2e.test.mjs` (server → bridge → runtime → records → restart, 10 checks), and `node test/diff.test.mjs server <go-binary>` (Go vs reference, 88 checks). |
+| `test/` | `node test/server.test.mjs` (22 scenarios), `node test/e2e.test.mjs` (server → bridge → runtime → records → restart, 10 checks), `node test/diff.test.mjs server <go-binary>` (Go vs reference, 88 checks) and `node test/restore-multipage.test.mjs server <go-binary>` (Go vs reference, 3-page checkpoint sets, 70 checks). |
 
 ## Endpoints (all GET, read-only)
 
