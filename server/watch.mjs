@@ -67,11 +67,17 @@ export async function xray(rpc, l, block) {
   try { const o = await call(l.token, '0x8da5cb5b'); if (o && o.length >= 66) { owner = addr(o); hasOwner = true; } } catch { /* no owner() is a fact, not a failure */ }
   const impl = await tryRead('EIP-1967 implementation slot', async () => addr(await rpc('eth_getStorageAt', [l.token, C.SLOT_IMPL, B])));
   const admin = await tryRead('EIP-1967 admin slot', async () => addr(await rpc('eth_getStorageAt', [l.token, C.SLOT_ADMIN, B])));
-  const s0 = await tryRead('pool slot0', () => call(C.STATEVIEW, '0xc815641c' + l.poolId.slice(2)));
+  const s0 = await tryRead('pool slot0', async () => slot0Fee(await call(C.STATEVIEW, '0xc815641c' + l.poolId.slice(2))));
   couldNotCheck.push('hook buy/sell fee values (no standard getter)');
   return { token: l.token, symbol: symbol || '', poolId: l.poolId, hook: l.hook, source: l.source, launchTx: l.tx, launchBlock: l.block, block,
     supply: supply || '', owner, hasOwner, proxyImpl: impl && impl !== Z ? impl : '', proxyAdmin: admin && admin !== Z ? admin : '',
-    lpFee: s0 ? parseInt(s0.slice(194, 258), 16) : -1, couldNotCheck };
+    lpFee: s0 === null ? -1 : s0, couldNotCheck };
+}
+// StateView.getSlot0 returns four words; the LP fee is the fourth. A short or malformed reply (some public nodes
+// answer "0x") is a failed read, never a fee of 0.
+function slot0Fee(h) {
+  if (typeof h !== 'string' || !/^0x[0-9a-fA-F]{256,}$/.test(h)) throw new Error('malformed slot0 reply');
+  return parseInt(h.slice(194, 258), 16);
 }
 
 // ---------- State. `checkpoint()` is the compact form copied into a public record; `restore()` reads it back. ----------
@@ -182,8 +188,9 @@ export async function cycle(rpc, s, log = () => {}) {
     if (s.cycles % C.FEE_EVERY === 0) for (const p of live) {
       try {
         const s0 = await rpc('eth_call', [{ to: C.STATEVIEW, data: '0xc815641c' + p.poolId.slice(2) }, hex(head)]);
-        const fee = parseInt(s0.slice(194, 258), 16);
-        if (p.lpFee >= 0 && fee !== p.lpFee) { p.fired |= 16; alert(s, p, 'fee', 'Pool LP fee changed from ' + p.lpFee + ' to ' + fee + ' pips', null, at, head); p.lpFee = fee; }
+        const fee = slot0Fee(s0);
+        if (!(p.lpFee >= 0)) p.lpFee = fee;                     // the X-ray could not read it: the first good read is the baseline
+        else if (fee !== p.lpFee) { p.fired |= 16; alert(s, p, 'fee', 'Pool LP fee changed from ' + p.lpFee + ' to ' + fee + ' pips', null, at, head); p.lpFee = fee; }
       } catch { s.gaps.push({ kind: 'fee', token: p.token, from: head, to: head }); }
     }
     for (const p of live) if (at >= p.untilAt) { p.closed = true; log('window closed ' + p.symbol + ': coverage report due'); }
@@ -199,7 +206,7 @@ export async function cycle(rpc, s, log = () => {}) {
 // runtime's copy cursor never duplicates it.
 function alert(s, p, kind, line, l, at, blockIfNoLog = 0) {
   const block = l ? parseInt(l.blockNumber, 16) : blockIfNoLog;
-  const key = String(block).padStart(10, '0') + ':' + kind + ':' + p.token.slice(2, 14);
+  const key = String(block).padStart(10, '0') + ':' + kind + ':' + p.token.slice(2); // the full address: vanity tokens can share a long prefix
   if (s.alerts.some(a => a.key === key)) return;
   s.alerts.push({ key, kind, token: p.token, symbol: p.symbol, poolId: p.poolId, line: line.slice(0, 300), tx: l ? l.transactionHash : '', block, at });
   s.alerts.sort((a, b) => (a.key < b.key ? -1 : 1));
