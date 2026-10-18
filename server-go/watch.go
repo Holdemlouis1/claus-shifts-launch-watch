@@ -64,6 +64,21 @@ func addr(h string) string {
 	return "0x" + strings.ToLower(h)
 }
 func hexOf(n int64) string { return "0x" + strconv.FormatInt(n, 16) }
+
+// StateView.getSlot0 returns four words; the LP fee is the fourth. A short or malformed reply (some public nodes
+// answer "0x") is a failed read, never a fee of 0.
+func slot0Fee(h string) (int64, bool) {
+	if len(h) < 258 || !strings.HasPrefix(h, "0x") {
+		return 0, false
+	}
+	for _, c := range h[2:] {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return 0, false
+		}
+	}
+	return parseHex(sub(h, 194, 258)), true
+}
+
 func parseHex(h string) int64 {
 	v, err := strconv.ParseInt(strings.TrimPrefix(h, "0x"), 16, 64)
 	if err != nil {
@@ -290,8 +305,10 @@ func xray(rpc *RPC, l Found, block int64) Xray {
 	lpFee := int64(-1)
 	if s0, err := call(STATEVIEW, "0xc815641c"+strings.TrimPrefix(l.PoolID, "0x")); err != nil {
 		cnc = append(cnc, "pool slot0")
+	} else if f, ok := slot0Fee(s0); !ok {
+		cnc = append(cnc, "pool slot0")
 	} else {
-		lpFee = parseHex(sub(s0, 194, 258))
+		lpFee = f
 	}
 	cnc = append(cnc, "hook buy/sell fee values (no standard getter)")
 	return Xray{Token: l.Token, Symbol: symbol, PoolID: l.PoolID, Hook: l.Hook, Source: l.Source, LaunchTx: l.Tx, LaunchBlock: l.Block, Block: block,
@@ -755,12 +772,14 @@ func Cycle(rpc *RPC, s *State, log func(string)) (*CycleResult, error) {
 			for _, i := range liveIdx {
 				p := &s.Pools[i]
 				s0, err := rpc.Str("eth_call", []interface{}{map[string]string{"to": STATEVIEW, "data": "0xc815641c" + strings.TrimPrefix(p.PoolID, "0x")}, hexOf(head)})
-				if err != nil {
+				fee, ok := slot0Fee(s0)
+				if err != nil || !ok {
 					s.Gaps = append(s.Gaps, Gap{Kind: "fee", Token: p.Token, From: head, To: head})
 					continue
 				}
-				fee := parseHex(sub(s0, 194, 258))
-				if p.LpFee >= 0 && fee != p.LpFee {
+				if p.LpFee < 0 {
+					p.LpFee = fee // the X-ray could not read it: the first good read is the baseline
+				} else if fee != p.LpFee {
 					p.Fired |= 16
 					alert(s, p, "fee", "Pool LP fee changed from "+strconv.FormatInt(p.LpFee, 10)+" to "+strconv.FormatInt(fee, 10)+" pips", nil, at, head)
 					p.LpFee = fee
@@ -800,7 +819,7 @@ func alert(s *State, p *Pool, kind, line string, l *Log, at, blockIfNoLog int64)
 	if l != nil {
 		block, tx = parseHex(l.BlockNumber), l.TransactionHash
 	}
-	key := fmt.Sprintf("%010d", block) + ":" + kind + ":" + sub(p.Token, 2, 14)
+	key := fmt.Sprintf("%010d", block) + ":" + kind + ":" + sub(p.Token, 2, len(p.Token)) // the full address: vanity tokens can share a long prefix
 	for _, a := range s.Alerts {
 		if a.Key == key {
 			return
